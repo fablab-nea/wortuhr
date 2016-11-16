@@ -11,11 +11,17 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_K
 char ssid[] = "neustadt-aisch.freifunk.net";
 char pass[] = "";
 IPAddress timeServer(132, 163, 4, 101); // time-a.timefreq.bldrdoc.gov
-int timeZone = 0;
+int timeZone = 1;
 
 WiFiUDP Udp;
 
-const uint8_t ledIndex[10][11] =  {
+struct phrase {
+  uint8_t row;
+  uint8_t col;
+  uint8_t len;
+};
+
+const uint8_t ledGrid[10][11] =  {
   { 0,    1,   2,   3,   4,  5,    6,   7,   8,   9,  10},
   { 21,  20,  19,  18,  17,  16,  15,  14,  13,  12,  11},
   { 22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32},
@@ -32,18 +38,12 @@ uint8_t minutesIndex[] = {
   111, // 1
   112, // 2
   113, // 3
-  110 //4
+  110  // 4
 };
 
-struct phrase {
-  uint8_t row;
-  uint8_t col;
-  uint8_t len;
-};
-
-phrase hourTable[12] = {
+const phrase hourTable[14] = {
   {8, 6, 5}, // zwölf
-  {5, 0, 3}, // ein
+  {5, 0, 4}, // eins
   {5, 7, 4}, // zwei
   {6, 0, 4}, // drei
   {6, 7, 4}, // vier
@@ -53,26 +53,26 @@ phrase hourTable[12] = {
   {7, 7, 4}, // acht
   {9, 3, 4}, // neun
   {9, 0, 4}, // zehn
-  {4, 5, 3} // elf
+  {4, 5, 3}, // elf
+  {0, 0, 0}, // reserved
+  {5, 0, 3}  // ein
 };
 
-phrase minuteTable[12][3] = {
-  {{9, 8,  3}, {0, 0,  0}, {0, 0,  0}}, // uhr
-  {{0, 7,  4}, {3, 7,  4}, {0, 0,  0}}, // fünf nach
-  {{1, 0,  4}, {3, 7,  4}, {0, 0,  0}}, // zehn nach
-  {{2, 4,  7}, {3, 7,  4}, {0, 0,  0}}, // viertel nach
-  {{1, 4,  7}, {3, 7,  4}, {0, 0,  0}}, // zwanzig nach
-  {{0, 7,  4}, {3, 0,  3}, {4, 0,  4}}, // fünf vor halb
-  {{4, 0,  4}, {0, 0,  0}, {0, 0,  0}}, // halb
-  {{0, 7,  4}, {3, 7,  4}, {4, 0,  4}}, // fünf nach halb
-  {{1, 4,  7}, {3, 0,  3}, {0, 0,  0}}, // zwanzig vor
-  {{2, 0, 11}, {0, 0,  0}, {0, 0,  0}}, // dreiviertel
-  {{1, 0,  4}, {3, 0,  3}, {0, 0,  0}}, // zehn vor
-  {{0, 7,  4}, {3, 0,  3}, {0, 0,  0}}, // fünf vor
-};
+const phrase phrase_es          = {0, 0,  2};
+const phrase phrase_ist         = {0, 3,  3};
 
-#define EINS_S_ROW 5
-#define EINS_S_COL 3
+const phrase phrase_uhr         = {9, 8,  3};
+
+const phrase phrase_fuenf       = {0, 7,  4};
+const phrase phrase_zehn        = {1, 0,  4};
+const phrase phrase_zwanzig     = {1, 4,  7};
+
+const phrase phrase_viertel     = {2, 4,  7};
+const phrase phrase_halb        = {4, 0,  4};
+const phrase phrase_dreiviertel = {2, 0, 11};
+
+const phrase phrase_vor         = {3, 0,  3};
+const phrase phrase_nach        = {3, 7,  4};
 
 void printWifiStatus() {
   Serial.print("SSID: ");
@@ -155,10 +155,10 @@ void clearLeds(bool sync) {
   }
 }
 
-void putPhrase(phrase *p, uint32_t c) {
+void putPhrase(const phrase *p, uint32_t c) {
   if (p->len > 0) {
     for (uint8_t i=0; i < p->len; i++) {
-      pixels.setPixelColor(ledIndex[p->row][p->col+i], c);
+      pixels.setPixelColor(ledGrid[p->row][p->col+i], c);
     }
   }
 }
@@ -183,6 +183,7 @@ void setup() {
 }
 
 void loop() {
+  uint8_t h;
   phrase (*pMinutes)[3];
   phrase *pHour;
 
@@ -195,23 +196,98 @@ void loop() {
   
   clearLeds(false);
   
-  // hour
-  pHour = &hourTable[hour()%12];
-  putPhrase(pHour, pixels.Color(0,0,64));
+  uint32_t minutesColor = pixels.Color(0,0,16);
+  uint32_t normalColor = pixels.Color(8,8,8);
+  uint32_t hoursColor = pixels.Color(16,0,0);
+  uint32_t exactMinutesColor = pixels.Color(0,16,0);
+  
+  h = hour()%12;
 
-  // minute
-  for (uint8_t minuteIndex=0; minuteIndex<3; minuteIndex++) {
-    putPhrase(&minuteTable[minute()/5][minuteIndex], pixels.Color(64,0,0));
+  putPhrase(&phrase_es, normalColor);
+  putPhrase(&phrase_ist, normalColor);
+
+  switch (minute()/5) {
+    case 0:
+      if (h == 1)
+		h = 13; // "es ist ein uhr"
+      putPhrase(&phrase_uhr, normalColor);
+      break;
+      
+    case 1:
+      putPhrase(&phrase_fuenf, minutesColor);
+      putPhrase(&phrase_nach, normalColor);
+      break;
+      
+    case 2:
+      putPhrase(&phrase_zehn, minutesColor);
+      putPhrase(&phrase_nach, normalColor);
+      break;
+      
+    case 3:
+      putPhrase(&phrase_viertel, minutesColor);
+      
+      //putPhrase(&phrase_nach, normalColor);
+
+      h++;
+      break;
+      
+    case 4:
+      putPhrase(&phrase_zwanzig, minutesColor);
+      putPhrase(&phrase_nach, normalColor);
+      break;
+
+    case 5:
+      putPhrase(&phrase_fuenf, minutesColor);
+      putPhrase(&phrase_vor, normalColor);
+      putPhrase(&phrase_halb, minutesColor);
+      h++;
+      break;
+      
+    case 6:
+      putPhrase(&phrase_halb, minutesColor);
+      h++;
+      break;
+      
+    case 7:
+      putPhrase(&phrase_fuenf, minutesColor);
+      putPhrase(&phrase_nach, normalColor);
+      putPhrase(&phrase_halb, minutesColor);
+      h++;
+      break;
+      
+    case 8:
+      putPhrase(&phrase_zwanzig, minutesColor);
+      putPhrase(&phrase_vor, normalColor);
+      h++;
+      break;
+      
+    case 9:
+      putPhrase(&phrase_dreiviertel, minutesColor);
+      h++;
+      break;
+
+    case 10:
+      putPhrase(&phrase_zehn, minutesColor);
+      putPhrase(&phrase_vor, normalColor);
+      h++;
+      break;
+      
+    case 11:
+      putPhrase(&phrase_fuenf, minutesColor);
+      putPhrase(&phrase_vor, normalColor);
+      h++;
+      break;
   }
+
+  if (h==13) h=0;
+  
+  // hour
+  putPhrase(&hourTable[h], hoursColor);
+
 
   // single leds for exact minutes
   for(uint8_t i=0; i<minute()%5; i++) {
-    pixels.setPixelColor(minutesIndex[i], pixels.Color(0,64,0));
-  }
-
-  // s von "eins"
-  if (hour()%12 == 1 && minute()/5 != 0) {
-    pixels.setPixelColor(ledIndex[EINS_S_ROW][EINS_S_COL], pixels.Color(64,0,64));
+    pixels.setPixelColor(minutesIndex[i], exactMinutesColor);
   }
 
   pixels.show();
