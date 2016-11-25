@@ -279,7 +279,7 @@ void loop() {
       break;
   }
 
-  if (h==13) h=0;
+  if (h==12) h=0;
   
   // hour
   putPhrase(&hourTable[h], hoursColor);
